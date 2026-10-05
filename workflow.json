@@ -1,0 +1,265 @@
+{
+  "name": "Daily Top 2 Google Calendar Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "818e9a22-b61f-45be-88e1-0ae678dfa7a1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3.8-27b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        896,
+        208
+      ],
+      "id": "29564f0d-6995-4c3a-a909-a18ce1e4da40",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "Kr4a6R0oT4ozvhsv",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "jaiswalpj13@gmail.com",
+          "mode": "list",
+          "cachedResultName": "jaiswalpj13@gmail.com"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $now.startOf('day').toISO() }}",
+        "timeMax": "={{ $now.endOf('day').toISO() }}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "8de481eb-eb5b-4cff-9fe8-8b0760f393f8",
+      "name": "Get many events",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "1VPkmLRILsVHs5o0",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ac37eb6b-ef0d-4529-b673-28cd391c1b80",
+              "name": "title",
+              "value": "={{ $json.summary }}",
+              "type": "string"
+            },
+            {
+              "id": "aca78fbc-4889-4b83-899e-d7e0fe1250c5",
+              "name": "description",
+              "value": "={{ $json.description || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "92dc3a96-298f-4af4-87b2-64d9b0b5dd9d",
+              "name": "start",
+              "value": "={{ $json.start.dateTime || $json.start.date }}",
+              "type": "string"
+            },
+            {
+              "id": "59657030-10b5-4c20-8430-2c84ce4870ab",
+              "name": "end",
+              "value": "={{ $json.end.dateTime || $json.end.date }}",
+              "type": "string"
+            },
+            {
+              "id": "641b8d54-2865-45ff-92b4-c239620e8c12",
+              "name": "attendees",
+              "value": "={{ ($json.attendees || []).map(a => a.email).join(', ') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "12c337b8-82f7-4951-8be9-c4feeec28757",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "events",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "9f84bd7a-2416-4ae5-b2bc-d2967f6e191f",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Today is {{ $now.toFormat('cccc, d LLLL yyyy') }}. Here are my events for today:\n\n{{ JSON.stringify($json.events) }}\n\nPick the two most important events using these rules, in order of priority:\n1. Events with words like \"interview\", \"deadline\", \"exam\", \"client\", \"demo\", \"review\" or \"presentation\" in the title or description.\n2. Events with more attendees.\n3. Events that have a description, since that usually means preparation is needed.\n4. Longer events over shorter ones.\nIgnore routine events like \"lunch\", \"gym\", \"break\" or \"focus time\" unless nothing else exists.\n\nFor each pick, show its start time in 24-hour format and explain why it matters in one or two sentences, referring to the specific rule that made it important. Then list any remaining events with their times in one line under \"Also today\". If there are no remaining events, leave out the \"Also today\" section entirely. If there are fewer than two real events, cover what exists.\n\nReturn ONLY the HTML body of an email. No markdown, no code fences, no extra text.\nEnd the email with \"— Your daily briefing bot 🤖\".",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        896,
+        0
+      ],
+      "id": "02335878-dd10-41cb-9e9f-d261e73153cb",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "sendTo": "jaiswalpj13@gmail.com",
+        "subject": "=Your top 2 for {{ $now.toFormat('cccc, d LLL') }}",
+        "message": "={{ $json.text.replace(/<think>[\\s\\S]*?<\\/think>/g, '').replace(/```html|```/g, '').trim() }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1264,
+        4.49999791383749
+      ],
+      "id": "71541134-1d53-4f79-81b9-586d555fa3ed",
+      "name": "Send a message",
+      "webhookId": "71782c5b-3dd4-431a-97a9-8ba3adc3c463",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9ogYaCu2HnAts6T6",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1,
+    "availableInMCP": false
+  },
+  "versionId": "f15164c5-0e90-45b4-ade3-b7f1293d505d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8c784b840d548cc2b21da192ffb2baab2371cb5e353eafe931c346dbca26e48f"
+  },
+  "nodeGroups": [],
+  "id": "52nQtxxK526CXBYE",
+  "tags": []
+}
